@@ -1,0 +1,75 @@
+<html><body><script src="/socket.io/socket.io.js"></script>
+    <script>
+        window.onload = function () {connectSocket();};
+        var socket;
+    
+        // connect socket.io
+        function connectSocket() {
+            socket = io('/admin');
+    
+            // notice chage phase
+            socket.on('notice_change_phase', (phasenum) => {
+                changedPhase(phasenum);
+            });
+    
+            // notice infomation
+            socket.on('notice_info', (msg) => {
+                updateScreen(JSON.parse(msg));
+            });
+    
+            // connect init
+            socket.connect();
+            socket.emit('admin_call_info');
+        }
+    
+        // changed phase
+        function changedPhase(phasenum) {
+            if(phasenum == 3) socket.emit('admin_count_vote');
+            socket.emit('admin_call_info');
+        }
+    
+        // update screen
+        function updateScreen(j) {
+            document.getElementById("phase").innerHTML = j.phase;
+            document.getElementById("caddr").innerHTML = j.cAddr;
+            document.getElementById("cbalance").innerHTML = j.cBalance;
+            var elements = document.getElementsByName("phase");
+            elements[j.phase].checked = true;
+            for(var i = 0;i <= j.phase; i++) elements[i].disabled = true;
+            var num = j.phase;
+            num++;
+            if(j.phase < 3) elements[num].disabled = false;
+        }
+    
+        // change phase
+        function changePhase() {
+            var elements = document.getElementsByName("phase");
+            var num;
+            for(var i = elements.length - 1; i >= 0; i--) {
+                if(elements[i].checked) {
+                    num = elements[i].value;
+                    break;
+                }
+            }
+            socket.emit('admin_change_phase', num);
+        }
+    </script>
+    <main>
+        <div class="div1">
+            <font size="+2">[ADMIN] VOTE SYSTEM</font> (ContractAddress: <span id="caddr"></span>)<br>
+            System Reserved Funds: <font size="+2"><span id="cbalance"></span> Ether</font>
+            now phase: <font size="+3"><span id="phase"></span> </font>
+        </div>
+        <hr>
+        <div class="div2"><br>
+            change PHASE<br><br>
+            　<input type="radio" name="phase" value="0" disabled="disabled">　phase0 立候補前<br><br>
+            　<input type="radio" name="phase" value="1" disabled="disabled">　phase1 立候補受付中<br><br>
+            　<input type="radio" name="phase" value="2" disabled="disabled">　phase2 投票中<br><br>
+            　<input type="radio" name="phase" value="3" disabled="disabled">　phase3 投票締め切り・結果発表<br><br>
+            <input type="button" value="CHANGE PHASE" onclick="changePhase();"/><br><br>
+        </div>
+    </main>
+    </body>
+    </html>
+    

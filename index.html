@@ -1,0 +1,295 @@
+<html><body><script src="/socket.io/socket.io.js"></script>
+    <script>
+        window.onload = function () {connectSocket();};
+        var socket;
+        var displayMode;
+    
+        // connect socket.io
+        function connectSocket() {
+            socket = io();
+    
+            // notice registerd
+            socket.on('notice_registerd', (addr) => {
+                console.log("notice_registerd");
+                showRegisterdNotice(addr);
+            });
+    
+            // notice voted
+            socket.on('notice_voted', (msg) => {
+                showVotedNotice(msg);
+            });
+    
+            // notice withdrawed
+            socket.on('notice_withdrawed', (msg) => {
+                showWithDrawedNotice(msg);
+            });
+    
+            // notice chage phase
+            socket.on('notice_change_phase', (num) => {
+                changePhase(num);
+                socket.emit('call_info');
+            });
+    
+            // notice infomation
+            socket.on('notice_info', (msg) => {
+                updateScreen(JSON.parse(msg));
+            });
+    
+            // notice votelist
+            socket.on('notice_votelist', (msg) => {
+                updateVoteTable(JSON.parse(msg));
+            });
+    
+            // notice pong
+            socket.on('notice_pong', (msg) => {
+                socket.emit('call_ping');
+            });
+    
+            // disconnect
+            socket.on('disconnect', (msg) => {
+                showInfo({phase:'8',cAddr:'',cBalance:''});
+                changeDisplayMode(displayMode);
+            });
+    
+            // connect init
+            socket.connect();
+            socket.emit('call_info');
+            socket.emit('call_votelist');
+        }
+    
+        // show after registerd
+        function showRegisterdNotice(msg) {
+            document.getElementById("p1result").innerHTML = "立候補しました！あなたのアドレスは「" + msg + "」です！";
+            document.getElementById("p2myaddress").value = msg;
+            displayMode = 'mode2_candidacy_done';
+            changeDisplayMode(displayMode);
+            socket.emit('call_votelist');
+        }
+    
+        // show after vote
+        function showVotedNotice(msg) {
+            if(msg == "null") {
+                document.getElementById("p2result").innerHTML = "投票に失敗しました。再度トライして下さい。"
+                return;
+            }
+            document.getElementById("p2result").innerHTML = "投票完了！あなたは「" + msg + "」に投票しました。";
+            displayMode = 'mode4_vote_done';
+            changeDisplayMode(displayMode);
+            socket.emit('call_votelist');
+        }
+    
+        // show after withdraw
+        function showWithDrawedNotice(msg) {
+            if(msg == 'OK') {
+                document.getElementById("p3result").innerHTML = "おめでとう！活動資金を貴方の口座に振り込みました。";
+            } else if(msg == 'NG') {
+                document.getElementById("p3result").innerHTML = "※あなたは当選者ではありません。";
+            } else {
+                // msg == 'OTHER'
+            }
+            socket.emit('call_info');
+            socket.emit('call_votelist');
+        }
+    
+        // change phase
+        function changePhase(num) {
+            switch(num) {
+                case '0': displayMode = 'mode0_init';           break;
+                case '1': displayMode = 'mode1_candidacy_now';  break;
+                case '2': displayMode = 'mode3_vote_now';       break;
+                case '3': displayMode = 'mode5_result_now';     break;
+            }
+            changeDisplayMode(displayMode);
+            socket.emit('call_votelist');
+        }
+    
+        // change display mode
+        function changeDisplayMode(mode) {
+            document.getElementById("p1title").style.color = "gray";
+            document.getElementById("p1name").disabled = true;
+            document.getElementById("p1manifesto").disabled = true;
+            document.getElementById("p1password").disabled = true;
+            document.getElementById("p1button").disabled = true;
+            document.getElementById("p2title").style.color = "gray";
+            document.getElementById("p2myaddress").disabled = true;
+            document.getElementById("p2voteaddress").disabled = true;
+            document.getElementById("p2votepassword").disabled = true;
+            document.getElementById("p2button").disabled = true;
+            document.getElementById("p3title").style.color = "gray";
+            document.getElementById("p3button").disabled = true;
+            switch(mode) {
+                case 'mode0_init':
+                    break;
+                case 'mode1_candidacy_now':
+                    document.getElementById("p1title").style.color = "red";
+                    document.getElementById("p1name").disabled = false;
+                    document.getElementById("p1manifesto").disabled = false;
+                    document.getElementById("p1password").disabled = false;
+                    document.getElementById("p1button").disabled = false;
+                    break;
+                case 'mode2_candidacy_done':
+                    document.getElementById("p1title").style.color = "red";
+                    break;
+                case 'mode3_vote_now':
+                    document.getElementById("p2title").style.color = "red";
+                    document.getElementById("p2votepassword").disabled = false;
+                    break;
+                case 'mode4_vote_done':
+                    document.getElementById("p2title").style.color = "red";
+                    break;
+                case 'mode5_result_now':
+                    document.getElementById("p3title").style.color = "red";
+                    document.getElementById("p3button").disabled = false;
+                    break;
+                case 'mode6_result_done':
+                    document.getElementById("p3title").style.color = "red";
+                    break;
+                case 'mode8_disconnect_error':
+                case 'mode9_transition_error':
+                    document.getElementById("reloadvotelist").disabled = true;
+                    break;
+            }
+        }
+    
+        // update screen
+        function updateScreen(j) {
+            showInfo(j);
+            changeDisplayMode(displayMode);
+        }
+    
+        // show info
+        function showInfo(j) {
+            document.getElementById("phase").innerHTML = j.phase;
+            document.getElementById("caddr").innerHTML = j.cAddr;
+            document.getElementById("cbalance").innerHTML = j.cBalance;
+            var pm;
+            switch(j.phase) {
+                case '0': pm = 'コントラクト準備中です。（管理者の操作待ち）'; break;
+                case '1': pm = '立候補者受付中！立候補した人だけが、次の「投票」権を得ます。'; break;
+                case '2': pm = '投票を行って下さい！当選者はこのコントラクト保有の全Etherをゲット出来ます！'; break;
+                case '3': pm = '＜開票終了＞当選者が決定しました。おめでとう！！'; break;
+                case '8': pm = 'エラー（※サーバーとの接続が途切れました。このバージョンでは続行できません）';
+                    displayMode = 'mode8_disconnect_error';
+                    break;
+                case '9': pm = 'エラー（※プロトタイプ版は、途中参加やリロードには対応していません）';
+                    displayMode = 'mode9_transition_error';
+                    break;
+            }
+            document.getElementById("phasemsg").innerHTML = pm;
+        }
+    
+        // show reload vote table
+        function updateVoteTable(j) {
+            dispResetVoteTable();
+            for(var i = 0; i < j.length; i++) {
+                dispAddVoteTable1Line(i, j);
+            }
+        }
+    
+        // reset vote table
+        function dispResetVoteTable() {
+            var table = document.getElementById("table");
+            for (var i = table.rows.length - 1; i > 0; i--) table.deleteRow(i);
+        }
+    
+        // add vote table one line
+        function dispAddVoteTable1Line(i, j) {
+            var table = document.getElementById("table");
+            var row = table.insertRow(-1);
+            var cell1 = row.insertCell(-1);
+            var cell2 = row.insertCell(-1);
+            var cell3 = row.insertCell(-1);
+            var cell4 = row.insertCell(-1);
+            var cell5 = row.insertCell(-1);
+            cell1.innerHTML = '<font size="-2">' + j[i].addr + '</font>';
+            cell2.innerHTML = j[i].name;
+            cell3.innerHTML = j[i].manifesto;
+            cell4.innerHTML = j[i].count;
+            cell5.innerHTML = '<font size="+1">' + j[i].balance + '</font>';
+            if(displayMode == "mode3_vote_now") {
+                var cell6 = row.insertCell(-1);
+                cell6.innerHTML = '<input type="button" value="この人に投票する" id="coladd" onclick="dispSetVoteAddress(\'' + j[i].addr + '\')";>';
+            }
+        }
+    
+        // set vote address
+        function dispSetVoteAddress(msg) {
+            document.getElementById("p2voteaddress").value = msg;
+            document.getElementById("p2button").disabled = false;
+        }
+    
+        // call regist
+        function callRegist() {
+            var v = {
+                name: document.getElementById("p1name").value,
+                manifesto: document.getElementById("p1manifesto").value,
+                password: document.getElementById("p1password").value
+            };
+            socket.emit('call_regist', JSON.stringify(v));
+        }
+    
+        // call vote
+        function callVote() {
+            var v = {
+                myaddr: document.getElementById("p2myaddress").value,
+                voteaddr: document.getElementById("p2voteaddress").value,
+                password: document.getElementById("p2votepassword").value
+            }
+            socket.emit('call_vote', JSON.stringify(v));
+        }
+    
+        // call withdraw funds
+        function callWithdrawFunds() {
+            var addr = document.getElementById("p2myaddress").value;
+            socket.emit('call_withdraw', addr);
+        }
+    
+        // call vote list
+        function callVoteList() {
+            socket.emit('call_votelist');
+        }
+    </script>
+    <main>
+        <div class="area_title">
+            <font size="+2">VOTE SYSTEM</font> (ContractAddress: <span id="caddr"></span>
+            , phase: <span id="phase"></span>)<br><font size="+3"><span id="phasemsg"></span></font><br><br>
+        </div>
+        <hr>
+        <div class = "area_p1">
+            <span id="p1title"><font size="+2">◆フェーズ１：立候補する！</font></span><br><br>
+            お名前 <input type="text" id="p1name"/>
+            マニフェスト（医療拡充、介護予算増加など） <input type="text" id="p1manifesto"/><br>
+            new password <input type="text" id="p1password"/><br><br>
+            <input type="button" id="p1button" value="立候補ボタン" onclick="callRegist();"/>
+            　<font color="red"><span id="p1result"</span></font>
+        </div>
+        <br><hr>
+        <div class = "area_p2">
+            <span id="p2title"><font size="+2">◆フェーズ２：投票を行う</font></span><br><br>
+            私 <input type="text" id="p2myaddress" size="48"/>は、<br>
+            <input type="text" id="p2voteaddress" size="48"/>に投票します。
+            password <input type="text" id="p2votepassword"/><br><br>
+            <input type="button" id="p2button" value="投票ボタン" onclick="callVote();"/>
+            　<font color="red"><span id="p2result"></span></font><br><br>
+            <div class = "div3">
+                <font size="+2">立候補者リスト</font>
+                <table id="table" border="1">
+                    <tr>
+                        <th>address</th><th>name</th><th>manifesto</th>
+                        <th>VoteCount</th><th>Ether Balance</th><th>SELECT</th>
+                    </tr>
+                </table>
+                <input type="button" id="reloadvotelist" value="RELOAD VOTE LIST" onclick="callVoteList();"/>
+                System Reserved Funds: <font size="+2"><span id="cbalance"></span> Ether</font><br><br>
+            </div><br>
+        </div>
+        <hr>
+        <div class = "area_p3">
+            <span id="p3title"><font size="+2">◆フェーズ３：当選者発表！</font></span><br><br>
+            <input type="button" id="p3button" value="資金を受け取る！" onclick="callWithdrawFunds();"/>
+            　<font color="red"><span id="p3result"></span></font><br><br>
+        </div>
+    </main>
+    </body>
+    </html>
+    
